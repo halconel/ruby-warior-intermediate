@@ -32,15 +32,45 @@ class WarriorTurn < SimpleDelegator
 		# Если мало здоровья, то надо немного отдохнуть от геройств.
 		elsif low_health? && !enemy_there? then self.rest!
 
-		# Если рядом пленный, то освободим его
+		# Если рядом пленный, то освободим его.
 		elsif captive_there? then rescue_captive!
-			
-
+		
+		# Если слышим, что на уровне есть еще хоть что-то, то вперед!	
+		elsif heard_something? then move_to_that_sound!
+				
 		# Пойдем к леснице, если ничего больше не остается.
 		else move_to_stairs! end 	
 
 		# Сохраним, сколько у нас осталось здоровья
 		last_turn_health = self.health
+	end
+
+	# Прислушаемся к шорохам
+	def heard_something?
+		!self.listen.empty?	
+	end
+
+	# Выберем наиболее интересный шорох
+	def choose_noise!
+		noises = self.listen
+		choosen_noise = noises[0]
+		noises.each {|noise|
+			if noise.captive? then choosen_noise = noise end
+		}
+		choosen_noise
+	end
+
+	# Пойдем на шум
+	def move_to_that_sound!
+		self.walk!(self.direction_of(choose_noise!))
+	end
+
+	# Есть еще враги на уровне
+	def still_enemies_there?
+		self.listen.each {|noise|
+			return true if noise.enemy?
+		}
+		false
 	end
 
 	# Освободим пленного
@@ -129,7 +159,7 @@ class WarriorTurn < SimpleDelegator
 	
 	# Проверим, что у нас мало здоровья и нас никто не бил на прошлом ходу
 	def low_health?
-		self.health < 20
+		self.health < 20 && still_enemies_there?
 	end
 end
   
