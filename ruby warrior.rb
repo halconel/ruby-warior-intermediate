@@ -13,25 +13,69 @@ end
 class WarriorTurn < SimpleDelegator
 
 	attr_accessor :last_turn_health
+	attr_accessor :binded_enemies
 
 	def initialize(warrior)
 		@last_turn_health = 20
+		@binded_enemies = []
 		super(warrior)
 	end
 
 	def go!
 
+		# Если рядом более одного врага, то сажаем их в клетку
+		if surounded? then bind_enemy!
+	
 		# Если рядом что-то есть, то на этом уровне - это враг. В атаку!
-		attack_enemy! if !nothing_there? 
+		elsif enemy_there? then attack_enemy!  
 
 		# Если мало здоровья, то надо немного отдохнуть от геройств.
-		self.rest! if low_health? && nothing_there?
+		elsif low_health? && !enemy_there? then self.rest!
+
+		# Если рядом пленный, то освободим его
+		elsif captive_there? then rescue_captive!
+			
 
 		# Пойдем к леснице, если ничего больше не остается.
-		move_to_stairs! if nothing_there? && !low_health?	
+		else move_to_stairs! end 	
 
 		# Сохраним, сколько у нас осталось здоровья
 		last_turn_health = self.health
+	end
+
+	# Освободим пленного
+	def rescue_captive!
+		done = false
+		# Сначала освободим пленных союзников
+		[:forward, :backward, :left, :right].each { |direction|
+			if self.feel(direction).captive? && !binded_enemies.include?(direction) then
+				done = true
+				self.rescue!(direction)
+				return nil
+			end
+		}
+
+		# Только потом освобождаем врагов, что бы убить
+		if !done then
+		[:forward, :backward, :left, :right].each { |direction|
+			if self.feel(direction).captive? then
+				self.rescue!(direction)
+				binded_enemies.delete(direction)
+				return nil
+			end
+		}
+		end
+	end
+	# Посадим врага в клетку
+	def bind_enemy!
+		[:forward, :backward, :left, :right].each { |direction|
+			if self.feel(direction).enemy? then
+				self.bind!(direction)
+				binded_enemies << direction
+				return nil
+			end
+		}
+				
 	end
 
 	# Перед нами только голые стены и мрак коридоров
@@ -42,6 +86,33 @@ class WarriorTurn < SimpleDelegator
 			nothing_there &= (space.empty? || space.wall?)
 		}
 		nothing_there
+	end
+
+	# Рядом есть враг
+	def enemy_there?
+		enemy_there = false
+		[:forward, :backward, :left, :right].each { |direction|
+			enemy_there |= self.feel(direction).enemy?
+		}
+		enemy_there
+	end
+
+	# Рядом есть пленный
+	def captive_there?
+		captive_there = false
+		[:forward, :backward, :left, :right].each { |direction|
+			captive_there |= self.feel(direction).captive?
+		}
+		captive_there
+	end
+
+	# Мы окружены врагами
+	def surounded?
+		enemy_count = 0
+		[:forward, :backward, :left, :right].each { |direction|
+			enemy_count += 1 if self.feel(direction).enemy?
+		}
+		enemy_count > 1
 	end
 
 	# Двигаем по направлению к леснице
