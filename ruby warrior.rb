@@ -13,7 +13,6 @@ end
 class WarriorTurn < SimpleDelegator
 
 	attr_accessor :last_turn_health
-	attr_accessor :binded_enemies
 
 	def initialize(warrior)
 		@last_turn_health = 20
@@ -51,7 +50,7 @@ class WarriorTurn < SimpleDelegator
 	end
 
 	# Выберем наиболее интересный шорох
-	def choose_noise!
+	def choosen_noise
 		noises = self.listen
 		choosen_noise = noises[0]
 		noises.each {|noise|
@@ -62,7 +61,20 @@ class WarriorTurn < SimpleDelegator
 
 	# Пойдем на шум
 	def move_to_that_sound!
-		self.walk!(self.direction_of(choose_noise!))
+		# Определим направление на шум
+		choosen_direction = self.direction_of(choosen_noise)
+
+		# Если в этом направлении лестница, то попробуем обойти
+		if self.feel(choosen_direction).stairs? then
+			[:forward, :backward, :left, :right].each { |direction|
+				if !self.feel(direction).stairs? && self.feel(direction).empty? then
+					self.walk!(direction)
+					return nil
+				end
+			}	
+		else 
+			self.walk!(choosen_direction)
+		end
 	end
 
 	# Есть еще враги на уровне
@@ -70,7 +82,8 @@ class WarriorTurn < SimpleDelegator
 		self.listen.each {|noise|
 			return true if noise.enemy?
 		}
-		false
+		
+		not @binded_enemies.empty?
 	end
 
 	# Освободим пленного
@@ -78,7 +91,7 @@ class WarriorTurn < SimpleDelegator
 		done = false
 		# Сначала освободим пленных союзников
 		[:forward, :backward, :left, :right].each { |direction|
-			if self.feel(direction).captive? && !binded_enemies.include?(direction) then
+			if self.feel(direction).captive? && ! @binded_enemies.include?(direction) then
 				done = true
 				self.rescue!(direction)
 				return nil
@@ -90,7 +103,7 @@ class WarriorTurn < SimpleDelegator
 		[:forward, :backward, :left, :right].each { |direction|
 			if self.feel(direction).captive? then
 				self.rescue!(direction)
-				binded_enemies.delete(direction)
+				@binded_enemies.delete(direction)
 				return nil
 			end
 		}
@@ -101,7 +114,7 @@ class WarriorTurn < SimpleDelegator
 		[:forward, :backward, :left, :right].each { |direction|
 			if self.feel(direction).enemy? then
 				self.bind!(direction)
-				binded_enemies << direction
+				@binded_enemies.push(direction)
 				return nil
 			end
 		}
@@ -162,4 +175,3 @@ class WarriorTurn < SimpleDelegator
 		self.health < 20 && still_enemies_there?
 	end
 end
-  
