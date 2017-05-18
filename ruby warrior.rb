@@ -1,3 +1,5 @@
+DEBUG = true
+
 class Player
 	# Инициализация
 	def initialize
@@ -13,10 +15,13 @@ end
 class WarriorTurn < SimpleDelegator
 
 	attr_accessor :last_turn_health
+	class << self; attr_accessor :bond_enemies end
+	@bond_enemies = []
+
+	DIRS = [:forward, :backward, :left, :right]
 
 	def initialize(warrior)
 		@last_turn_health = 20
-		@binded_enemies = []
 		super(warrior)
 	end
 
@@ -66,7 +71,7 @@ class WarriorTurn < SimpleDelegator
 
 		# Если в этом направлении лестница, то попробуем обойти
 		if self.feel(choosen_direction).stairs? then
-			[:forward, :backward, :left, :right].each { |direction|
+			DIRS.each { |direction|
 				if !self.feel(direction).stairs? && self.feel(direction).empty? then
 					self.walk!(direction)
 					return nil
@@ -83,39 +88,49 @@ class WarriorTurn < SimpleDelegator
 			return true if noise.enemy?
 		}
 		
-		not @binded_enemies.empty?
+		puts "Bond enemies: " + WarriorTurn.bond_enemies.size.to_s if DEBUG
+
+		!WarriorTurn.bond_enemies.empty?
+	end
+
+	# Проверяет, что переданная область содержет пленненного врага
+	def is_bond_enemy?(direction)
+		self.feel(direction).captive? && WarriorTurn.bond_enemies.include?(direction)
 	end
 
 	# Освободим пленного
 	def rescue_captive!
 		done = false
 		# Сначала освободим пленных союзников
-		[:forward, :backward, :left, :right].each { |direction|
-			if self.feel(direction).captive? && ! @binded_enemies.include?(direction) then
+		DIRS.each { |direction|
+			space = self.feel(direction)
+			if space.captive? && !is_bond_enemy?(direction) then
 				done = true
 				self.rescue!(direction)
-				return nil
+				break
 			end
 		}
 
 		# Только потом освобождаем врагов, что бы убить
 		if !done then
-		[:forward, :backward, :left, :right].each { |direction|
-			if self.feel(direction).captive? then
-				self.rescue!(direction)
-				@binded_enemies.delete(direction)
-				return nil
-			end
-		}
+			DIRS.each { |direction|
+				space = self.feel(direction)
+				if space.captive? then
+					self.rescue!(direction)
+					WarriorTurn.bond_enemies.delete(direction) if is_bond_enemy?(direction)
+					break
+				end
+			}
 		end
 	end
+	
 	# Посадим врага в клетку
 	def bind_enemy!
-		[:forward, :backward, :left, :right].each { |direction|
+		DIRS.each { |direction|
 			if self.feel(direction).enemy? then
+				WarriorTurn.bond_enemies << direction
 				self.bind!(direction)
-				@binded_enemies.push(direction)
-				return nil
+				break
 			end
 		}
 				
@@ -124,7 +139,7 @@ class WarriorTurn < SimpleDelegator
 	# Перед нами только голые стены и мрак коридоров
 	def nothing_there?
 		nothing_there = true
-		[:forward, :backward, :left, :right].each { |direction|
+		DIRS.each { |direction|
 			space = self.feel(direction)
 			nothing_there &= (space.empty? || space.wall?)
 		}
@@ -134,8 +149,8 @@ class WarriorTurn < SimpleDelegator
 	# Рядом есть враг
 	def enemy_there?
 		enemy_there = false
-		[:forward, :backward, :left, :right].each { |direction|
-			enemy_there |= self.feel(direction).enemy?
+		DIRS.each { |direction|
+			enemy_there ||= self.feel(direction).enemy?
 		}
 		enemy_there
 	end
@@ -143,8 +158,8 @@ class WarriorTurn < SimpleDelegator
 	# Рядом есть пленный
 	def captive_there?
 		captive_there = false
-		[:forward, :backward, :left, :right].each { |direction|
-			captive_there |= self.feel(direction).captive?
+		DIRS.each { |direction|
+			captive_there ||= self.feel(direction).captive?
 		}
 		captive_there
 	end
@@ -152,7 +167,7 @@ class WarriorTurn < SimpleDelegator
 	# Мы окружены врагами
 	def surounded?
 		enemy_count = 0
-		[:forward, :backward, :left, :right].each { |direction|
+		DIRS.each { |direction|
 			enemy_count += 1 if self.feel(direction).enemy?
 		}
 		enemy_count > 1
@@ -165,7 +180,7 @@ class WarriorTurn < SimpleDelegator
 
 	# Атакуем врага, который рядом
 	def attack_enemy!
-		[:forward, :backward, :left, :right].each { |direction|
+		DIRS.each { |direction|
 			self.attack!(direction) if self.feel(direction).enemy?
 		}
 	end
