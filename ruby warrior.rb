@@ -29,6 +29,12 @@ class WarriorTurn < SimpleDelegator
 
 		# Если рядом более одного врага, то сажаем их в клетку
 		if surounded? then bind_enemy!
+
+		# Разминируем, а то взорвется
+		elsif bomb_there? then defuese_bomb!
+
+		# Скорее скорее, надо разминировать бомбу
+		elsif heard_bomb? then move_to_bomb!
 	
 		# Если рядом что-то есть, то на этом уровне - это враг. В атаку!
 		elsif enemy_there? then attack_enemy!  
@@ -47,6 +53,65 @@ class WarriorTurn < SimpleDelegator
 
 		# Сохраним, сколько у нас осталось здоровья
 		last_turn_health = self.health
+	end
+
+	# Поспешим к бомбе
+	def move_to_bomb!
+
+		direction = nil
+		self.listen.each {|space|
+			if space.ticking? then
+				direction = self.direction_of(space)
+				break
+			end
+		}
+		
+		if self.feel(direction).empty? then
+			self.walk!(direction)
+		else
+			DIRS.each {|bypass|
+				if bypass != direction &&
+				   bypass != turn_away(direction) &&
+				   self.feel(bypass).empty? then
+
+					self.walk!(bypass)
+					break
+				end
+			}
+		end
+	end
+
+	# Возвращает направление обратное заданному
+	def turn_away(direction)
+		return :forward 	if direction == :backward
+		return :backward 	if direction == :forward
+		return :left 		if direction == :right
+		return :right 		if direction == :left
+	end
+
+	# Разминируем бомбу
+	def defuese_bomb!
+		DIRS.each {|direction|
+			if self.feel(direction).ticking? then
+				self.rescue!(direction)
+				break
+			end
+		}
+	end
+	# Что-то тикает - это бомба
+	def heard_bomb?
+		self.listen.each {|space|
+			if space.ticking? then return true end
+		}
+		false
+	end
+
+	# Перед нами бомба
+	def bomb_there?
+		DIRS.each {|direction|
+			if self.feel(direction).ticking? then return true end 
+		}
+		false
 	end
 
 	# Прислушаемся к шорохам
